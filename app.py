@@ -1,21 +1,44 @@
+# """
+# LOGIN AND DOMAIN GATEKEEPING
+# """
+
+# import streamlit as st
+
+# # Check if the user is logged in
+# if not st.user.is_logged_in:
+#     st.write("Please log in to access this dashboard.")
+#     if st.button("Log in with Google"):
+#         st.login("google")  # Triggers Google login prompt
+#     st.stop()
+
+# # Gatekeep by domain
+# user_email = st.experimental_user.email
+# if not user_email.endswith("@yourcompany.com"):
+#     st.error("Access Denied: This dashboard is restricted to corporate domain users only.")
+#     st.stop()
+
+# # --- Your Actual Dashboard Code Starts Here ---
+# st.title("My Secure Professional Dashboard")
+# st.write("Welcome, teammate!")
+
 """
 CX Tech N2 — Service Desk Dashboard
 Streamlit app · Jira Cloud REST API
 """
-
+ 
 import os
 from datetime import datetime, timedelta
-
+ 
 import urllib3
 import requests
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from dotenv import load_dotenv
-
+ 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 load_dotenv()
-
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────────────────────
@@ -27,7 +50,7 @@ JIRA_FIELDS    = (
     "summary,status,assignee,created,resolutiondate,project,"
     "customfield_10950,customfield_10033,customfield_15420,customfield_17153,priority"
 )
-
+ 
 # Brand palette
 C_GREEN       = "#0C8046"
 C_GREEN_DARK  = "#034036"
@@ -42,8 +65,8 @@ C_BG          = "#FBF8EC"
 C_BG_S1       = "#F6EDDF"
 C_BG_S2       = "#ECE0CD"
 C_MUTED       = "#8a8099"
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Page config  (must be first Streamlit call)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -53,7 +76,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Global CSS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -62,7 +85,7 @@ st.markdown(f"""
   /* ── Page background ── */
   .stApp {{ background: {C_BG}; }}
   .stApp > header {{ background: transparent; }}
-
+ 
   /* ── Sidebar ── */
   [data-testid="stSidebar"] {{
       background: white;
@@ -72,7 +95,7 @@ st.markdown(f"""
       color: {C_PURPLE_MID};
       font-size: 12px;
   }}
-
+ 
   /* ── Give every Plotly chart a card look ── */
   [data-testid="stPlotlyChart"] > div {{
       background: white;
@@ -80,14 +103,14 @@ st.markdown(f"""
       box-shadow: 0 1px 4px rgba(27,19,64,0.09);
       padding: 4px;
   }}
-
+ 
   /* ── DataFrames ── */
   [data-testid="stDataFrame"] > div {{
       border-radius: 10px;
       box-shadow: 0 1px 4px rgba(27,19,64,0.09);
       overflow: hidden;
   }}
-
+ 
   /* ── KPI cards ── */
   .kpi-card {{
       background: white;
@@ -108,7 +131,7 @@ st.markdown(f"""
       border-radius: 2px; margin-top: 10px; overflow: hidden;
   }}
   .kpi-bar   {{ height: 100%; border-radius: 2px; }}
-
+ 
   /* ── Section headers ── */
   .sec-header {{
       display: flex; align-items: center; gap: 10px;
@@ -124,7 +147,7 @@ st.markdown(f"""
   .sec-sub {{
       font-size: 12px; color: {C_MUTED}; margin-left: 2px;
   }}
-
+ 
   /* ── Page header banner ── */
   .page-header {{
       background: linear-gradient(120deg, {C_PURPLE_DARK} 0%, {C_PURPLE_MID} 100%);
@@ -163,20 +186,20 @@ st.markdown(f"""
       font-size: 11px;
       margin-top: 6px;
   }}
-
+ 
   /* ── Chart sub-captions ── */
   .chart-cap {{
       font-size: 11px; font-weight: 600; color: {C_MUTED};
       text-transform: uppercase; letter-spacing: .04em;
       margin-bottom: 4px;
   }}
-
+ 
   /* ── Hide Streamlit branding ── */
   #MainMenu, footer {{ visibility: hidden; }}
 </style>
 """, unsafe_allow_html=True)
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Auth
 # ─────────────────────────────────────────────────────────────────────────────
@@ -185,8 +208,8 @@ def get_credentials():
         return st.secrets["JIRA_EMAIL"], st.secrets["JIRA_TOKEN"]
     except Exception:
         return os.getenv("JIRA_EMAIL", ""), os.getenv("JIRA_TOKEN", "")
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Jira API  (cached 5 min)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -200,13 +223,13 @@ def fetch_all_issues(from_date: str, to_date: str, email: str, _token: str):
     )
     all_issues, next_token = [], None
     progress = st.empty()
-
+ 
     while True:
         progress.caption(f"⏳ Fetching tickets… {len(all_issues)} loaded")
         body = {"jql": jql, "fields": JIRA_FIELDS.split(","), "maxResults": 100}
         if next_token:
             body["nextPageToken"] = next_token
-
+ 
         resp = requests.post(
             f"{JIRA_BASE}/search/jql",
             auth=(email, _token),
@@ -222,48 +245,66 @@ def fetch_all_issues(from_date: str, to_date: str, email: str, _token: str):
         next_token = data.get("nextPageToken")
         if not next_token or not batch:
             break
-
+ 
     progress.empty()
     return all_issues
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Field helpers
 # ─────────────────────────────────────────────────────────────────────────────
 def is_retained(i):  return (i["fields"].get("customfield_10950") or {}).get("value", "") == RETAINED_SQUAD
 def get_squad(i):    return (i["fields"].get("customfield_15420") or {}).get("value", "Unknown")
 def is_done(i):      return (i["fields"].get("status") or {}).get("statusCategory", {}).get("key") == "done"
-
+ 
 def get_issue_tag(i):
     tags = i["fields"].get("customfield_17153") or []
     return tags[0].replace("_", " ") if tags else "Unknown"
-
+ 
 def get_sla(i):
     sla = i["fields"].get("customfield_10033")
-    if not sla: return {"available": False}
+    if not sla:
+        return {"available": False}
     cycles = sla.get("completedCycles", [])
-    if cycles: return {"available": True, "breached": cycles[-1].get("breached", False)}
+    if cycles:
+        last = cycles[-1]
+        return {
+            "available":    True,
+            "breached":     last.get("breached", False),
+            "goal":         (last.get("goalDuration")  or {}).get("friendly", ""),
+            "elapsed":      (last.get("elapsedDuration") or {}).get("friendly", ""),
+            "breach_time":  (last.get("breachTime")    or {}).get("jiraTimestamp", ""),
+            "active":       False,
+        }
     ongoing = sla.get("ongoingCycle")
-    if ongoing: return {"available": True, "breached": ongoing.get("breached", False)}
+    if ongoing:
+        return {
+            "available":    True,
+            "breached":     ongoing.get("breached", False),
+            "goal":         (ongoing.get("goalDuration")     or {}).get("friendly", ""),
+            "remaining":    (ongoing.get("remainingDuration") or {}).get("friendly", ""),
+            "breach_time":  (ongoing.get("breachTime")       or {}).get("jiraTimestamp", ""),
+            "active":       True,
+        }
     return {"available": False}
-
+ 
 def get_ym(i):
     d = i["fields"].get("created", "")
     if not d: return ""
     dt = datetime.fromisoformat(d.replace("Z", "+00:00"))
     return f"{dt.year}-{dt.month:02d}"
-
+ 
 def label_ym(ym):
     y, m = ym.split("-")
     return datetime(int(y), int(m), 1).strftime("%b %y")
-
+ 
 def pct(n, t):        return round(n * 100 / t) if t else 0
 def ret_color(r):     return C_GREEN if r >= 80 else C_PURPLE_MAIN if r >= 60 else C_MAGENTA
-
+ 
 def fmt_date(d):
     if not d: return "—"
     return datetime.fromisoformat(d.replace("Z", "+00:00")).strftime("%d %b %Y")
-
+ 
 def fmt_resolution(created, resolved):
     if not resolved: return "—"
     h = (
@@ -273,8 +314,8 @@ def fmt_resolution(created, resolved):
     if h < 1:  return "<1h"
     if h < 24: return f"{round(h)}h"
     return f"{h / 24:.1f}d"
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Chart defaults
 # ─────────────────────────────────────────────────────────────────────────────
@@ -295,12 +336,12 @@ def chart_layout(**overrides):
     )
     base.update(overrides)
     return base
-
+ 
 AXIS_DEFAULTS = dict(
     showgrid=True, gridcolor=C_BG_S1,
     zeroline=False, linecolor=C_BG_S2, tickfont=dict(size=11)
 )
-
+ 
 def section(title, subtitle="", color=C_MAGENTA):
     st.markdown(
         f'<div class="sec-header">'
@@ -310,8 +351,8 @@ def section(title, subtitle="", color=C_MAGENTA):
         f'</div>',
         unsafe_allow_html=True,
     )
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Credentials check
 # ─────────────────────────────────────────────────────────────────────────────
@@ -323,8 +364,8 @@ if not email or not token:
         "or to *App settings → Secrets* on Streamlit Community Cloud."
     )
     st.stop()
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sidebar
 # ─────────────────────────────────────────────────────────────────────────────
@@ -338,18 +379,18 @@ with st.sidebar:
     )
     st.divider()
     st.markdown(f'<div style="font-size:11px;font-weight:700;color:{C_PURPLE_MID};text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Date range</div>', unsafe_allow_html=True)
-
+ 
     today        = datetime.today().date()
     default_from = (datetime.today() - timedelta(days=90)).date()
     date_range   = st.date_input("", value=(default_from, today), max_value=today, label_visibility="collapsed")
-
+ 
     if len(date_range) != 2:
         st.warning("Select a start and end date.")
         st.stop()
-
+ 
     from_date, to_date = str(date_range[0]), str(date_range[1])
     st.divider()
-
+ 
     with st.spinner("Loading from Jira…"):
         try:
             issues = fetch_all_issues(from_date, to_date, email, token)
@@ -359,11 +400,11 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Error: {e}")
             st.stop()
-
+ 
     if not issues:
         st.warning("No tickets found for this period.")
         st.stop()
-
+ 
     st.markdown(
         f'<div style="background:{C_GREEN_LIGHT};border-radius:6px;padding:8px 12px;'
         f'font-size:12px;color:{C_GREEN_DARK};font-weight:600">'
@@ -371,38 +412,38 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.divider()
-
+ 
     if "fk" not in st.session_state:
         st.session_state.fk = 0
     fk = st.session_state.fk
-
+ 
     st.markdown(f'<div style="font-size:11px;font-weight:700;color:{C_PURPLE_MID};text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Filters</div>', unsafe_allow_html=True)
-
+ 
     projects = sorted({(i["fields"].get("project") or {}).get("name", "Unknown") for i in issues})
     proj_sel = st.selectbox("Project",   ["All Projects"] + projects,                      key=f"proj_{fk}")
-
+ 
     squads   = sorted({get_squad(i) for i in issues})
     sq_sel   = st.selectbox("Squad",     ["All Squads"]   + squads,                        key=f"sq_{fk}")
-
+ 
     tags     = sorted({get_issue_tag(i) for i in issues})
     tag_sel  = st.selectbox("Issue Tag", ["All Tags"]     + tags,                          key=f"tag_{fk}")
-
+ 
     months_avail = sorted({get_ym(i) for i in issues if get_ym(i)})
     month_labels = [label_ym(m) for m in months_avail]
     mo_sel   = st.selectbox("Month",     ["All Months"]   + month_labels,                  key=f"mo_{fk}")
-
+ 
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("✕  Clear all filters", type="secondary", use_container_width=True):
         st.session_state.fk += 1
         st.rerun()
-
+ 
     st.divider()
     st.markdown(
         f'<div style="font-size:11px;color:{C_MUTED}">Refreshed {datetime.now().strftime("%d/%m/%Y %H:%M")}</div>',
         unsafe_allow_html=True,
     )
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Apply filters
 # ─────────────────────────────────────────────────────────────────────────────
@@ -413,15 +454,15 @@ if tag_sel  != "All Tags":     filtered = [i for i in filtered if get_issue_tag(
 if mo_sel   != "All Months":
     sel_ym = next((m for m in months_avail if label_ym(m) == mo_sel), None)
     if sel_ym: filtered = [i for i in filtered if get_ym(i) == sel_ym]
-
+ 
 active_filters = [f for f in [
     proj_sel if proj_sel != "All Projects" else None,
     sq_sel   if sq_sel   != "All Squads"   else None,
     tag_sel  if tag_sel  != "All Tags"     else None,
     mo_sel   if mo_sel   != "All Months"   else None,
 ] if f]
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # KPI calculations
 # ─────────────────────────────────────────────────────────────────────────────
@@ -431,21 +472,26 @@ escalated  = total - retained
 open_cnt   = sum(1 for i in filtered if not is_done(i))
 done_cnt   = total - open_cnt
 ret_rate   = pct(retained, total)
-
+ 
 sla_issues   = [i for i in filtered if get_sla(i)["available"]]
 sla_breached = sum(1 for i in sla_issues if get_sla(i)["breached"])
 sla_ok       = len(sla_issues) - sla_breached
 sla_rate     = pct(sla_ok, len(sla_issues)) if sla_issues else None
-
+ 
 rc      = ret_color(ret_rate)
 sc      = ret_color(sla_rate) if sla_rate is not None else "#97a0af"
 sla_val = f"{sla_rate}%" if sla_rate is not None else "—"
-sla_sub = f"{sla_breached} breached" if sla_issues else "no SLA data"
-
+ 
+# Most common SLA goal duration across tickets
+sla_goals = [get_sla(i).get("goal", "") for i in sla_issues if get_sla(i).get("goal")]
+common_goal = max(set(sla_goals), key=sla_goals.count) if sla_goals else ""
+goal_label  = f"goal: {common_goal} · " if common_goal else ""
+sla_sub     = f"{goal_label}{sla_breached} breached" if sla_issues else "no SLA data"
+ 
 filter_note = " · ".join(active_filters) if active_filters else "All data"
 date_label  = f"{date_range[0].strftime('%d %b %y')} → {date_range[1].strftime('%d %b %y')}"
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Page header banner
 # ─────────────────────────────────────────────────────────────────────────────
@@ -461,8 +507,8 @@ st.markdown(f"""
   </div>
 </div>
 """, unsafe_allow_html=True)
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # KPI cards
 # ─────────────────────────────────────────────────────────────────────────────
@@ -483,7 +529,7 @@ def kpi_card(icon, val, label, sub, color, bar_pct=None):
         f'{bar_html}'
         f'</div>'
     )
-
+ 
 cols = st.columns(6)
 cards = [
     ("📥", str(total),    "Total Received",  "escalated to L2",  C_PURPLE_DARK, None),
@@ -496,10 +542,10 @@ cards = [
 for col, (icon, val, label, sub, color, bar) in zip(cols, cards):
     with col:
         st.markdown(kpi_card(icon, val, label, sub, color, bar), unsafe_allow_html=True)
-
+ 
 st.markdown("<br>", unsafe_allow_html=True)
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Monthly buckets
 # ─────────────────────────────────────────────────────────────────────────────
@@ -516,17 +562,17 @@ for i in filtered:
     if sla["available"]:
         if sla["breached"]:      mb[ym]["sla_br"]     += 1
         else:                    mb[ym]["sla_ok"]      += 1
-
+ 
 months   = sorted(mb.keys())
 m_labels = [label_ym(m) for m in months]
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Row 1 — Retention donut + Monthly volume
 # ─────────────────────────────────────────────────────────────────────────────
 section("Ticket Volume & Retention", color=C_PURPLE_MAIN)
 col_d, col_v = st.columns([1, 2])
-
+ 
 with col_d:
     fig = go.Figure(go.Pie(
         labels=["Retained (N2)", "Escalated (L3)", "Still Open"],
@@ -545,7 +591,7 @@ with col_d:
     )
     fig.update_layout(title=dict(text="Retention vs L3 Escalation", font=dict(size=13, color=C_PURPLE_DARK)), height=290, **chart_layout(margin=dict(l=12, r=12, t=40, b=12)))
     st.plotly_chart(fig, use_container_width=True)
-
+ 
 with col_v:
     rr_line = [
         round(mb[m]["retained"] / (mb[m]["retained"] + mb[m]["escalated"]) * 100)
@@ -582,14 +628,14 @@ with col_v:
         **chart_layout(),
     )
     st.plotly_chart(fig, use_container_width=True)
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Row 2 — SLA
 # ─────────────────────────────────────────────────────────────────────────────
 section("SLA Performance", color=C_GREEN)
 col_sd, col_sm = st.columns([1, 2])
-
+ 
 with col_sd:
     if sla_issues:
         fig = go.Figure(go.Pie(
@@ -610,7 +656,7 @@ with col_sd:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No SLA data available for this period.")
-
+ 
 with col_sm:
     fig = go.Figure([
         go.Bar(name="SLA Met",      x=m_labels, y=[mb[m]["sla_ok"] for m in months],
@@ -624,8 +670,8 @@ with col_sm:
         **chart_layout(),
     )
     st.plotly_chart(fig, use_container_width=True)
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper: paired horizontal bar charts
 # ─────────────────────────────────────────────────────────────────────────────
@@ -633,7 +679,7 @@ def render_hbar_pair(sec_title, sec_sub, items_vol, items_rate):
     section(sec_title, sec_sub, color=C_MAGENTA)
     col_vol, col_rate = st.columns(2)
     bar_h = max(260, len(items_vol) * 44)
-
+ 
     with col_vol:
         st.markdown('<div class="chart-cap">Volume — Retained vs Escalated</div>', unsafe_allow_html=True)
         fig = go.Figure([
@@ -657,7 +703,7 @@ def render_hbar_pair(sec_title, sec_sub, items_vol, items_rate):
             **chart_layout(),
         )
         st.plotly_chart(fig, use_container_width=True)
-
+ 
     with col_rate:
         st.markdown('<div class="chart-cap">Retention Rate %</div>', unsafe_allow_html=True)
         rates = [pct(s["retained"], s["total"]) for s in items_rate]
@@ -679,8 +725,8 @@ def render_hbar_pair(sec_title, sec_sub, items_vol, items_rate):
             **chart_layout(),
         )
         st.plotly_chart(fig, use_container_width=True)
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Squad charts
 # ─────────────────────────────────────────────────────────────────────────────
@@ -690,21 +736,21 @@ for i in filtered:
     if sq not in squad_map: squad_map[sq] = dict(retained=0, escalated=0)
     if is_retained(i): squad_map[sq]["retained"] += 1
     else:              squad_map[sq]["escalated"] += 1
-
+ 
 top_squads     = sorted(
     [{"name": k, **v, "total": v["retained"] + v["escalated"]} for k, v in squad_map.items()],
     key=lambda x: x["total"], reverse=True,
 )[:10]
 squads_by_rate = sorted(top_squads, key=lambda s: pct(s["retained"], s["total"]))
-
+ 
 render_hbar_pair(
     "Top Squads by Volume",
     f"top {len(top_squads)} of {len(squad_map)}",
     list(reversed(top_squads)),
     squads_by_rate,
 )
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Issue tag charts
 # ─────────────────────────────────────────────────────────────────────────────
@@ -714,26 +760,26 @@ for i in filtered:
     if tag not in issue_map: issue_map[tag] = dict(retained=0, escalated=0)
     if is_retained(i): issue_map[tag]["retained"] += 1
     else:              issue_map[tag]["escalated"] += 1
-
+ 
 top_tags     = sorted(
     [{"name": k, **v, "total": v["retained"] + v["escalated"]} for k, v in issue_map.items()],
     key=lambda x: x["total"], reverse=True,
 )[:10]
 tags_by_rate = sorted(top_tags, key=lambda s: pct(s["retained"], s["total"]))
-
+ 
 render_hbar_pair(
     "Top Issue Tags by Volume",
     f"top {len(top_tags)} of {len(issue_map)}",
     list(reversed(top_tags)),
     tags_by_rate,
 )
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # By Area (Project)
 # ─────────────────────────────────────────────────────────────────────────────
 section("By Area (Project)", color=C_PURPLE_MID)
-
+ 
 areas = {}
 for i in filtered:
     proj = (i["fields"].get("project") or {}).get("name", "Unknown")
@@ -745,7 +791,7 @@ for i in filtered:
     if sla["available"]:
         areas[proj]["sla_tot"] += 1
         if sla["breached"]: areas[proj]["sla_br"] += 1
-
+ 
 area_rows = [
     {
         "Project":        name,
@@ -759,13 +805,13 @@ area_rows = [
 ]
 if area_rows:
     st.dataframe(pd.DataFrame(area_rows), hide_index=True, use_container_width=True)
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # Team Workload
 # ─────────────────────────────────────────────────────────────────────────────
 section("Team Workload", color=C_PURPLE_MID)
-
+ 
 workload = {}
 for i in filtered:
     name = (i["fields"].get("assignee") or {}).get("displayName", "Unassigned")
@@ -774,7 +820,7 @@ for i in filtered:
     else:              workload[name]["done"] += 1
     if is_retained(i): workload[name]["retained"] += 1
     else:              workload[name]["escalated"] += 1
-
+ 
 wl_rows = [
     {
         "Assignee":     name,
@@ -789,19 +835,19 @@ wl_rows = [
 ]
 if wl_rows:
     st.dataframe(pd.DataFrame(wl_rows), hide_index=True, use_container_width=True)
-
-
+ 
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 # All Tickets
 # ─────────────────────────────────────────────────────────────────────────────
 section("All Tickets", color=C_PURPLE_MID)
-
+ 
 fc1, fc2, fc3, fc4 = st.columns(4)
 with fc1: status_f = st.selectbox("Status", ["All", "Done", "Open / WIP"],       key=f"fs_{fk}")
 with fc2: type_f   = st.selectbox("Type",   ["All", "Retained", "Escalated L3"], key=f"ft_{fk}")
 with fc3: sla_f    = st.selectbox("SLA",    ["All", "Breached", "OK"],           key=f"fl_{fk}")
 with fc4: search_f = st.text_input("Search summary", placeholder="Type to search…", key=f"fq_{fk}")
-
+ 
 tf = filtered[:]
 if status_f == "Done":         tf = [i for i in tf if is_done(i)]
 if status_f == "Open / WIP":   tf = [i for i in tf if not is_done(i)]
@@ -810,7 +856,19 @@ if type_f   == "Escalated L3": tf = [i for i in tf if not is_retained(i)]
 if sla_f    == "Breached":     tf = [i for i in tf if get_sla(i)["available"] and     get_sla(i)["breached"]]
 if sla_f    == "OK":           tf = [i for i in tf if get_sla(i)["available"] and not get_sla(i)["breached"]]
 if search_f:                   tf = [i for i in tf if search_f.lower() in (i["fields"].get("summary") or "").lower()]
-
+ 
+def fmt_sla_due(sla_info):
+    """Return a human-readable deadline label."""
+    bt = sla_info.get("breach_time", "")
+    if not bt:
+        return "—"
+    try:
+        dt = datetime.fromisoformat(bt.replace("Z", "+00:00"))
+        label = dt.strftime("%d %b %Y %H:%M")
+        return f"⚠ {label}" if sla_info.get("breached") else label
+    except Exception:
+        return "—"
+ 
 ticket_rows = [
     {
         "Key":        f"https://gympass.atlassian.net/browse/{i['key']}",
@@ -821,12 +879,14 @@ ticket_rows = [
         "Status":     (i["fields"].get("status") or {}).get("name", "?"),
         "Type":       "Retained" if is_retained(i) else "Escalated L3",
         "SLA":        ("Breached" if get_sla(i)["breached"] else "OK") if get_sla(i)["available"] else "—",
+        "SLA Goal":   get_sla(i).get("goal", "—") if get_sla(i)["available"] else "—",
+        "Due By":     fmt_sla_due(get_sla(i)) if get_sla(i)["available"] else "—",
         "Created":    fmt_date(i["fields"].get("created")),
         "Resolution": fmt_resolution(i["fields"].get("created"), i["fields"].get("resolutiondate")),
     }
     for i in tf
 ]
-
+ 
 if ticket_rows:
     df_t = pd.DataFrame(ticket_rows)
     st.dataframe(
